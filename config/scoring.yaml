@@ -1,0 +1,45 @@
+# Контракт оценки TrafficFlowBench, релиз организаторов 1.0.
+# Алгоритмы читают эти числа отсюда. В коде решений их нет.
+# Источник: docs/SCORING_SPEC.md и analysis/03-ocenka.md.
+
+total_weights:
+  state: 0.35
+  queue: 0.30
+  physics: 0.15
+  odme: 0.20
+
+state:
+  speed_weight: 0.54
+  flow_weight: 0.46
+  speed_rmse_scale_kmh: 25
+  flow_rmse_scale_vph_per_lane: 600
+  # Ячейка пригодна к оценке, если детектор передал не меньше этой доли пятиминутки.
+  eligible_pct_observed_min: 75
+  regimes:
+    R1: 0.20
+    R2: 0.30
+    R3: 0.50
+
+queue:
+  # Очередь: скорость не выше этой доли свободной скорости связи.
+  free_speed_fraction: 0.60
+  history_minutes: 60
+  horizon_minutes: 30
+  step_minutes: 5
+
+physics:
+  # S_physics = (fd_parts * S_FD + lwr_parts * S_LWR) / (fd_parts + lwr_parts).
+  fd_parts: 1
+  lwr_parts: 2
+  # Панель, где больше этой доли сданных ячеек ниже порога потока, получает S_FD = 0.
+  low_flow_vph_per_cell: 50
+  low_flow_fraction_that_zeros_fd: 0.20
+  ramp_eligible_pct_observed_min: 75
+
+odme:
+  lambda: 0.05
+  weights:
+    od: 0.45
+    link: 0.25
+    dev: 0.15
+    attr: 0.15

@@ -1,0 +1,10 @@
+# Скопируйте этот файл в config/release.local.yaml и укажите свой путь.
+# release.local.yaml в git не входит.
+#
+# release_root — распакованный каталог kaggle_public, не его родитель.
+# Пакет берётся со страницы Data соревнования и должен быть пересборкой после 11 сентября 2026.
+# Перекрывается переменной окружения TFB_RELEASE_ROOT и флагом --release-root.
+
+release_root: null
+panel: D12_I5_N
+split: validation

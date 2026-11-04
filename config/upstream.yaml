@@ -1,0 +1,4 @@
+# Код оценщиков организаторов. Каталог third_party/ в git не входит.
+repository: https://github.com/jacky850/trafficflowbench-public
+ref: main
+commit: f9e3fbc35c066419726987e470448f33d4c72fd9

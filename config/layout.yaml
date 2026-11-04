@@ -1,0 +1,34 @@
+# Раскладка распакованного корня kaggle_public.
+# Имена коридоров здесь не перечисляются: их читает каталог из corridors.json релиза.
+# Подстановки {panel} и {split} заполняет читатель.
+
+paths:
+  corridors_catalog: config/corridors.json
+  unmasked_dir: "corridors/{panel}/{split}/mainline_states"
+  masked_dir: "corridors/{panel}/{split}/mainline_states_masked"
+  state_template: "task1/{panel}/{split}/sample_submission_state.csv"
+  queue_template: "task2/{panel}/{split}/sample_submission_queue.csv"
+  odme_template: "task4/{panel}/{split}/sample_submission_path_flow.csv"
+  observation_glob: "**/*.parquet"
+
+schemas:
+  state_columns:
+    - panel
+    - timestamp
+    - station_id
+    - link_id
+    - mask_regime
+    - speed_kmh
+    - flow_vph
+  queue_columns:
+    - window_id
+    - timestamp
+    - link_id
+    - queue_pred
+  odme_columns:
+    - panel
+    - departure_time
+    - path_id
+    - origin_zone
+    - destination_zone
+    - path_flow

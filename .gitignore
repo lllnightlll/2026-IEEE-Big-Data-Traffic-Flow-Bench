@@ -1,0 +1,20 @@
+# Байткод и локальные окружения.
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Путь к распакованному пакету на этой машине. Пример лежит в config/release.example.yaml.
+config/release.local.yaml
+
+# Сам релиз Kaggle в git не входит: около 13 ГБ и раздаётся только со страницы Data.
+kaggle_public/
+data_public/
+
+# Код организаторов клонируется локально. В репозитории хранится только commit в config/upstream.yaml.
+third_party/
+
+# Артефакты прогонов. Журнал experiments/log.md остаётся.
+experiments/artifacts/

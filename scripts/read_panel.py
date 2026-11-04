@@ -1,0 +1,16 @@
+"""Точка входа чтения панели. Логика лежит в пакете, скрипт только находит src."""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+SOURCE = Path(__file__).resolve().parents[1] / "src"
+if str(SOURCE) not in sys.path:
+    sys.path.insert(0, str(SOURCE))
+
+from trafficflowbench.cli.read_panel import main  # noqa: E402
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

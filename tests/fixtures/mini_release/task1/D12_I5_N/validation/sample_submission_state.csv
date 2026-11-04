@@ -1,0 +1,5 @@
+panel,timestamp,station_id,link_id,mask_regime,speed_kmh,flow_vph
+D12_I5_N,2031-03-01T00:00:00Z,st1,lk1,R1,,
+D12_I5_N,2031-03-01T00:05:00Z,st1,lk1,R1,,
+D12_I5_N,2031-03-02T00:00:00Z,st2,lk2,R2,,
+D12_I5_N,2031-03-04T00:00:00Z,st3,lk3,R3,,
