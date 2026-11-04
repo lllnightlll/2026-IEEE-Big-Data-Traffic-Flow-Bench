@@ -1,0 +1,6 @@
+{
+  "python.defaultInterpreterPath": "${env:USERPROFILE}\\anaconda3\\python.exe",
+  "terminal.integrated.env.windows": {
+    "PATH": "${env:USERPROFILE}\\anaconda3;${env:USERPROFILE}\\anaconda3\\Scripts;${env:PATH}"
+  }
+}

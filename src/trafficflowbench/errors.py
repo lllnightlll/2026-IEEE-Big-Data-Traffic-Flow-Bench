@@ -23,3 +23,11 @@ class TemplateNotFound(ProjectError):
 
 class TemplateSchemaError(ProjectError):
     """Заголовок шаблона не содержит колонок, заданных в config/layout.yaml."""
+
+
+class OrganizerFailed(ProjectError):
+    """Скрипт организаторов завершился ненулевым кодом. Формулу оценки мы не подменяем."""
+
+
+class SubmissionRejected(ProjectError):
+    """Сдача неполная или нарушает контракт. Такой файл на Kaggle не отправляется."""

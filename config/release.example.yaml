@@ -8,3 +8,7 @@
 release_root: null
 panel: D12_I5_N
 split: validation
+submission_splits:
+  - validation
+  - private
+artifact_dir: experiments/artifacts/v1

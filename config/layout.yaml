@@ -10,6 +10,7 @@ paths:
   queue_template: "task2/{panel}/{split}/sample_submission_queue.csv"
   odme_template: "task4/{panel}/{split}/sample_submission_path_flow.csv"
   observation_glob: "**/*.parquet"
+  submission_key: submission_key.csv
 
 schemas:
   state_columns:
@@ -32,3 +33,24 @@ schemas:
     - origin_zone
     - destination_zone
     - path_flow
+
+# Склейка в шесть колонок, которые читает Kaggle. Дыра в любой задаче отвергает весь файл.
+merge:
+  chunk_rows: 1000000
+  output_columns:
+    - submission_id
+    - task
+    - speed_kmh
+    - flow_vph
+    - queue_pred
+    - path_flow
+  tasks:
+    state:
+      keys: [panel, timestamp, station_id, link_id, mask_regime]
+      values: [speed_kmh, flow_vph]
+    queue:
+      keys: [window_id, timestamp, link_id]
+      values: [queue_pred]
+    odme:
+      keys: [panel, departure_time, path_id]
+      values: [path_flow]

@@ -2,3 +2,10 @@
 repository: https://github.com/jacky850/trafficflowbench-public
 ref: main
 commit: f9e3fbc35c066419726987e470448f33d4c72fd9
+checkout: third_party/trafficflowbench-public
+scripts:
+  state_build: src/task1/build_task1_baseline_submission.py
+  state_score: src/task1/score_task1.py
+  queue_build: src/task2/build_task2_persistence_submission.py
+  odme_build: src/task4/build_task4_odme_artifacts.py
+  odme_score: src/task4/score_task4.py

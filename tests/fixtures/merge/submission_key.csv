@@ -1,0 +1,4 @@
+submission_id,task,panel,timestamp,station_id,link_id,mask_regime,window_id,departure_time,path_id
+1,state,D12_I5_N,2031-03-01T00:00:00Z,st1,lk1,R1,,,
+2,queue,,2031-03-01T01:05:00Z,,lk1,,w1,,
+3,odme,D12_I5_N,,,,,,"validation_period",p1

@@ -1,0 +1,18 @@
+# Слой v2 для State. Числа не дублируются в алгоритме.
+# Профиль считает день недели и пятиминутку. Контекст добавляет остаток
+# от наблюдаемых соседей. Порог 75% здесь не выбрасывает ряд: доля наблюдения — вес.
+
+temporal_steps: 6
+spatial_hops: 4
+spatial_weight: 0.6
+temporal_weight: 0.4
+# Вес ячейки = max(pct_observed / observation_weight_scale, minimum_observation_weight),
+# если скорость конечна. Иначе ячейка не свидетельство.
+observation_weight_scale: 100
+minimum_observation_weight: 0.05
+# Ниже этой скорости плотность q/v не считается: поток просто ограничивается вместимостью.
+speed_epsilon_kmh: 1.0
+# Отложенная доля дней train. День входит, если blake2b(panel|date) mod modulus == remainder.
+holdout_modulus: 7
+holdout_remainder: 0
+artifact_dir: experiments/artifacts/v2
