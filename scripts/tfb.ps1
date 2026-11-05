@@ -41,17 +41,23 @@ switch ($Command) {
         & $Python (Join-Path $Repo "scripts\run_context.py") @Rest
         exit $LASTEXITCODE
     }
+    "queue" {
+        & $Python (Join-Path $Repo "scripts\run_queue.py") @Rest
+        exit $LASTEXITCODE
+    }
     "check" {
         & $Python (Join-Path $Repo "tests\check_panel_reader.py")
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         & $Python (Join-Path $Repo "tests\check_assembler.py")
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         & $Python (Join-Path $Repo "tests\check_context.py")
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        & $Python (Join-Path $Repo "tests\check_queue.py")
         exit $LASTEXITCODE
     }
     default {
         Write-Host "Python: $Python"
-        Write-Host "Команды: read-panel, baseline, check"
+        Write-Host "Команды: read-panel, baseline, context, queue, check"
         Write-Host "Пример: .\scripts\tfb.ps1 read-panel --release-root tests\fixtures\mini_release --panel D12_I5_N --split validation"
         exit 0
     }

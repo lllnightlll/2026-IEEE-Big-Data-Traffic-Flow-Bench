@@ -34,6 +34,17 @@ class LinkChain:
         link_ids = tuple(ordered["link_id"].tolist())
         return cls(link_ids=link_ids, position={link_id: index for index, link_id in enumerate(link_ids)})
 
+    def upstream(self, link_id: str) -> str | None:
+        """Сосед против движения. Очередь распространяется туда, а не вниз по потоку.
+
+        order_index в топологии растёт по ходу движения: у первой связи входящих
+        главных связей нет, у следующей во входящих стоит предыдущая.
+        """
+        index = self.position.get(str(link_id))
+        if index is None or index == 0:
+            return None
+        return self.link_ids[index - 1]
+
     @classmethod
     def read(cls, panel_dir: Path) -> LinkChain:
         path = panel_dir / "network" / "lwr_mainline_topology.csv"
