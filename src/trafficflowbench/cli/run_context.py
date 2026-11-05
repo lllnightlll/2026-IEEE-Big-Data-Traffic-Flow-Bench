@@ -37,8 +37,11 @@ class RunContextCommand:
         parser.add_argument("--release-root", type=Path, default=None)
         parser.add_argument("--panel", default=None)
         parser.add_argument("--split", default=None, help="сплит сдачи, обычно validation")
+        parser.add_argument("--all-panels", action="store_true", help="все панели и оба сплита ключа Kaggle")
         parser.add_argument("--score-train", action="store_true", help="сравнить с профилем на train официальным оценщиком")
         args = parser.parse_args(self.argv)
+        if args.all_panels and (args.panel or args.split or args.score_train):
+            raise ProjectError("полный прогон не совмещается с --panel, --split и --score-train")
 
         root = repo_root_from(Path(__file__))
         config = ProjectConfig.load(root, release_root_override=args.release_root)
@@ -46,27 +49,37 @@ class RunContextCommand:
         if config.request.release_root is None:
             raise ReleaseNotFound("путь к релизу не задан")
         release = ReleaseRoot(config.request.release_root)
-        panel = args.panel or config.request.panel
-        split = args.split or config.request.split
-        release.locate(config.layout.corridors_catalog, panel, split)
         from trafficflowbench.data.catalog import CorridorCatalog
 
-        CorridorCatalog.load(release.path / config.layout.corridors_catalog).require(panel)
-        panel_dir = release.path / "corridors" / panel
-        trainer = PanelContextTrainer(panel, panel_dir, config.layout, settings)
-        artifact_dir = root / settings.artifact_dir / panel
-        artifact_dir.mkdir(parents=True, exist_ok=True)
+        catalog = CorridorCatalog.load(release.path / config.layout.corridors_catalog)
+        if args.all_panels:
+            panels = list(catalog.ids())
+            splits = list(config.request.submission_splits)
+        else:
+            panel = args.panel or config.request.panel
+            catalog.require(panel)
+            panels = [panel]
+            splits = [args.split or config.request.split]
         minutes = config.scoring.queue_step_minutes
         lines: list[str] = []
-
-        if args.score_train:
-            lines.extend(self._score_train(trainer, config, settings, artifact_dir, minutes, release.path))
-
-        model = trainer.fit(set(), minutes)
-        submission = artifact_dir / f"state_{split}.csv"
-        written = self._write_split(model, trainer, config.layout, split, submission)
-        lines.append(f"context_submission: {submission}")
-        lines.append(f"context_rows: {written}")
+        for panel in panels:
+            panel_dir = release.path / "corridors" / panel
+            trainer = PanelContextTrainer(panel, panel_dir, config.layout, settings)
+            artifact_dir = root / settings.artifact_dir / panel
+            artifact_dir.mkdir(parents=True, exist_ok=True)
+            if args.score_train:
+                lines.extend(self._score_train(trainer, config, settings, artifact_dir, minutes, release.path))
+            print(f"[context] {panel}", flush=True)
+            model = trainer.fit(set(), minutes)
+            for split in splits:
+                submission = artifact_dir / f"state_{split}.csv"
+                written = self._write_split(model, trainer, config.layout, split, submission)
+                print(f"  {split}: {written:,} строк", flush=True)
+                lines.append(f"{panel} {split}: {written}")
+        if args.all_panels:
+            upload, written = self._assemble(config, settings, panels, splits, release.path)
+            lines.append(f"submission: {upload}")
+            lines.append(f"submission_rows: {written}")
         sys.stdout.write("\n".join(lines) + "\n")
         return 0
 
@@ -137,6 +150,43 @@ class RunContextCommand:
         predictions = pd.concat(pieces, ignore_index=True)
         template = trainer.panel_dir.parent.parent / "task1" / trainer.panel / split / "sample_submission_state.csv"
         return StateSubmissionWriter(layout.state_columns).write(template, predictions, output)
+
+    @staticmethod
+    def _assemble(
+        config: ProjectConfig,
+        settings: ContextSettings,
+        panels: list[str],
+        splits: list[str],
+        release_root: Path,
+    ) -> tuple[Path, int]:
+        """State берётся из v2, очередь и ODME остаются файлами принятой базы v1."""
+        from trafficflowbench.baseline.pipeline import _concat_csv
+        from trafficflowbench.submission.assembler import SubmissionAssembler
+
+        version_dir = config.repo_root / settings.artifact_dir
+        baseline_dir = config.repo_root / config.request.artifact_dir
+        state_parts: list[Path] = []
+        queue_parts: list[Path] = []
+        odme_parts: list[Path] = []
+        for split in splits:
+            split_state = version_dir / f"state_{split}.csv"
+            _concat_csv([version_dir / panel / f"state_{split}.csv" for panel in panels], split_state)
+            state_parts.append(split_state)
+            queue_parts.append(baseline_dir / f"queue_{split}.csv")
+            odme_parts.append(baseline_dir / f"odme_{split}" / "baseline_submission.csv")
+        state_file = version_dir / "state_submission.csv"
+        queue_file = version_dir / "queue_submission.csv"
+        odme_file = version_dir / "odme_submission.csv"
+        _concat_csv(state_parts, state_file)
+        _concat_csv(queue_parts, queue_file)
+        _concat_csv(odme_parts, odme_file)
+        upload = version_dir / "submission.csv"
+        written = SubmissionAssembler(config.layout.merge).assemble(
+            {"state": state_file, "queue": queue_file, "odme": odme_file},
+            release_root / config.layout.submission_key,
+            upload,
+        )
+        return upload, written
 
 
 def _regime_score(sheet: ScoreSheet, regime: str) -> float:
