@@ -10,6 +10,12 @@ from trafficflowbench.config_loader import _as_float, _as_int, _read_mapping
 from trafficflowbench.errors import ConfigError
 
 
+def _as_bool(value: object, label: str) -> bool:
+    if not isinstance(value, bool):
+        raise ConfigError(f"{label} должен быть true или false")
+    return value
+
+
 def _as_float_list(value: object, label: str) -> tuple[float, ...]:
     if not isinstance(value, list) or not value:
         raise ConfigError(f"{label} должен быть непустым списком чисел")
@@ -39,6 +45,10 @@ class QueueModelSettings:
     l2_regularization: float
     random_state: int
     artifact_dir: str
+    # Отдельные модели onset и ongoing. Пустые строки значат «как в прежнем прогоне».
+    separate_conditions: bool
+    base_artifact: str
+    previous_report: str
 
     @classmethod
     def load(cls, path: Path) -> QueueModelSettings:
@@ -63,6 +73,9 @@ class QueueModelSettings:
             l2_regularization=_as_float(raw.get("l2_regularization"), "l2_regularization"),
             random_state=_as_int(raw.get("random_state"), "random_state"),
             artifact_dir=str(raw.get("artifact_dir") or ""),
+            separate_conditions=_as_bool(raw.get("separate_conditions", False), "separate_conditions"),
+            base_artifact=str(raw.get("base_artifact") or ""),
+            previous_report=str(raw.get("previous_report") or ""),
         )
         if settings.holdout_modulus <= 1:
             raise ConfigError("holdout_modulus должен быть больше 1")

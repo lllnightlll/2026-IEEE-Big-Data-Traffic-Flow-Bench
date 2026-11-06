@@ -49,6 +49,14 @@ switch ($Command) {
         & $Python (Join-Path $Repo "scripts\run_queue_model.py") @Rest
         exit $LASTEXITCODE
     }
+    "queue-split" {
+        & $Python (Join-Path $Repo "scripts\run_queue_model.py") @("--settings", (Join-Path $Repo "config\queue_split.yaml")) @Rest
+        exit $LASTEXITCODE
+    }
+    "state-residual" {
+        & $Python (Join-Path $Repo "scripts\run_state_residual.py") @Rest
+        exit $LASTEXITCODE
+    }
     "check" {
         & $Python (Join-Path $Repo "tests\check_panel_reader.py")
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -59,11 +67,13 @@ switch ($Command) {
         & $Python (Join-Path $Repo "tests\check_queue.py")
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         & $Python (Join-Path $Repo "tests\check_queue_model.py")
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        & $Python (Join-Path $Repo "tests\check_state_residual.py")
         exit $LASTEXITCODE
     }
     default {
         Write-Host "Python: $Python"
-        Write-Host "Команды: read-panel, baseline, context, queue, queue-model, check"
+        Write-Host "Команды: read-panel, baseline, context, queue, queue-model, queue-split, state-residual, check"
         Write-Host "Пример: .\scripts\tfb.ps1 read-panel --release-root tests\fixtures\mini_release --panel D12_I5_N --split validation"
         exit 0
     }

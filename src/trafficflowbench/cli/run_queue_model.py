@@ -29,30 +29,33 @@ class RunQueueModelCommand:
         parser.add_argument("--release-root", type=Path, default=None)
         parser.add_argument("--panel", default=None)
         parser.add_argument("--evaluate-only", action="store_true")
+        parser.add_argument("--settings", type=Path, default=None, help="YAML обучения очереди, по умолчанию config/queue_model.yaml")
         args = parser.parse_args(self.argv)
         root = repo_root_from(Path(__file__))
         config = ProjectConfig.load(root, release_root_override=args.release_root)
         if config.request.release_root is None:
             raise ReleaseNotFound("путь к релизу не задан")
         release = ReleaseRoot(config.request.release_root)
-        model_settings = QueueModelSettings.load(root / "config" / "queue_model.yaml")
+        settings_path = args.settings if args.settings is not None else root / "config" / "queue_model.yaml"
+        model_settings = QueueModelSettings.load(settings_path)
         rule = QueueSettings.load(root / "config" / "queue.yaml")
         panels = [args.panel] if args.panel else _task2_panels(release.path, config.request.submission_splits)
         version_dir = root / model_settings.artifact_dir
         version_dir.mkdir(parents=True, exist_ok=True)
+        previous = _previous_scores(root, model_settings)
         fits: list[tuple[QueuePanelStudy, QueueFit]] = []
         for panel in panels:
             print(f"[queue-model] {panel}", flush=True)
             study = QueuePanelStudy(panel, release.path, config.scoring, model_settings, rule)
-            fit = study.fit()
+            fit = study.fit(previous_score=previous.get(panel))
             fits.append((study, fit))
             _print_summary(fit)
         report = pd.DataFrame([fit.summary for _, fit in fits])
         report_path = version_dir / "holdout_iou.csv"
         report.to_csv(report_path, index=False)
         print(f"holdout: {report_path}", flush=True)
-        if args.evaluate_only or all(fit.kind == "rule" for _, fit in fits):
-            print("submission: правило v3 остаётся, новая сдача не собрана", flush=True)
+        if args.evaluate_only or all(fit.kind in {"rule", "keep"} for _, fit in fits):
+            print("submission: прежняя очередь остаётся, новая сдача не собрана", flush=True)
             return 0
         queue_file = self._queue_file(root, rule, model_settings, fits, config.request.submission_splits)
         context = ContextSettings.load(root / "config" / "context.yaml")
@@ -69,12 +72,13 @@ class RunQueueModelCommand:
         fits: list[tuple[QueuePanelStudy, QueueFit]],
         splits: tuple[str, ...],
     ) -> Path:
-        base = pd.read_csv(root / rule.artifact_dir / "queue_submission.csv", dtype=str)
+        base_dir = model_settings.base_artifact or rule.artifact_dir
+        base = pd.read_csv(root / base_dir / "queue_submission.csv", dtype=str)
         base["window_id"] = base["window_id"].astype(str)
         replaced: list[pd.DataFrame] = []
         drop_ids: set[str] = set()
         for study, fit in fits:
-            if fit.kind == "rule":
+            if fit.kind in {"rule", "keep"}:
                 continue
             for split in splits:
                 part = study.predict_split(fit, split)
@@ -110,9 +114,33 @@ def _print_summary(fit: QueueFit) -> None:
         f"persistence {summary.get('report_persistence')} "
         f"rule {summary.get('report_rule')} "
         f"model {summary.get('report_model')} "
-        f"blend {summary.get('report_blend')}",
+        f"blend {summary.get('report_blend')} "
+        f"split {summary.get('report_split', '')}",
         flush=True,
     )
+
+
+def _previous_scores(root: Path, settings: QueueModelSettings) -> dict[str, float]:
+    """Балл уже принятого выбора по коридору. Новый слой должен обойти его, а не только правило."""
+    if not settings.previous_report:
+        return {}
+    path = root / settings.previous_report
+    if not path.is_file():
+        return {}
+    frame = pd.read_csv(path)
+    if "panel" not in frame.columns or "kind" not in frame.columns:
+        return {}
+    column_of = {"model": "report_model", "blend": "report_blend", "rule": "report_rule", "split": "report_split"}
+    scores: dict[str, float] = {}
+    for row in frame.itertuples(index=False):
+        column = column_of.get(str(row.kind))
+        if column is None or column not in frame.columns:
+            continue
+        value = getattr(row, column)
+        if value is None or (isinstance(value, float) and pd.isna(value)) or value == "":
+            continue
+        scores[str(row.panel)] = float(value)
+    return scores
 
 
 def _task2_panels(release_root: Path, splits: tuple[str, ...]) -> list[str]:

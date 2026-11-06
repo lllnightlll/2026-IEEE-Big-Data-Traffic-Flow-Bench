@@ -1,0 +1,26 @@
+# Очередь v5. Onset и ongoing учатся отдельно: на срыве скорость ещё свободная,
+# а поток уже близко к вместимости. Порог скорости по-прежнему в scoring.yaml.
+# В сдачу коридор попадает только если отложенные дни обходят и правило, и балл v4.
+
+holdout_modulus: 7
+holdout_remainder: 0
+train_stride_minutes: 30
+eval_separation_minutes: 360
+short_steps: 3
+quiet_keep: 0.05
+max_positive_rows: 150000
+max_negative_rows: 150000
+min_positive_rows: 200
+min_windows: 5
+min_iou_gain: 0.02
+decision_thresholds: [0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+learning_rate: 0.06
+max_iter: 120
+max_leaf_nodes: 63
+min_samples_leaf: 40
+l2_regularization: 1.0
+random_state: 0
+separate_conditions: true
+base_artifact: experiments/artifacts/v4
+previous_report: experiments/artifacts/v4/holdout_iou.csv
+artifact_dir: experiments/artifacts/v5

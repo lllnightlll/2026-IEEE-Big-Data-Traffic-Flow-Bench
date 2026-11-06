@@ -14,7 +14,14 @@ sys.path.insert(0, str(REPO / "src"))
 from trafficflowbench.queue.forecast import RecurrentQueueProfile  # noqa: E402
 from trafficflowbench.queue.model_settings import QueueModelSettings  # noqa: E402
 from trafficflowbench.queue.settings import QueueSettings  # noqa: E402
-from trafficflowbench.queue.supervised import DayLattice, ObservedQueueRule, origin_batch  # noqa: E402
+from trafficflowbench.queue.supervised import (  # noqa: E402
+    EXTRA_FEATURE_NAMES,
+    FEATURE_NAMES,
+    DayLattice,
+    ObservedQueueRule,
+    downstream_queue_proximity,
+    origin_batch,
+)
 
 
 def expect(condition: bool, message: str) -> None:
@@ -37,14 +44,27 @@ def main() -> int:
     loaded = QueueModelSettings.load(REPO / "config" / "queue_model.yaml")
     expect(loaded.holds_out("D12_I5_N", "2030-06-01") == loaded.holds_out("D12_I5_N", "2030-06-01"), "хеш дня устойчив")
     expect(0 < loaded.min_iou_gain < 1, "запас IoU задан")
+    expect(loaded.separate_conditions is False, "старый файл очереди не включает раздельные модели")
+    split_settings = QueueModelSettings.load(REPO / "config" / "queue_split.yaml")
+    expect(split_settings.separate_conditions is True, "v5 учит onset и ongoing отдельно")
+    expect(bool(split_settings.base_artifact), "v5 опирается на уже принятую очередь")
 
     profile = RecurrentQueueProfile(("A", "B", "C"), step_minutes=5)
-    before, labels_before, _ = origin_batch(lattice(), origin=20, history_points=13, horizon=6, short_steps=3, profile=profile)
+    fresh = lattice()
+    before, labels_before, _ = origin_batch(fresh, origin=20, history_points=13, horizon=6, short_steps=3, profile=profile)
+    extended_before, _, _ = origin_batch(fresh, origin=20, history_points=13, horizon=6, short_steps=3, profile=profile, extended=True)
     changed = lattice()
     changed.speed[:, 21:] = 0.0
-    after, labels_after, valid = origin_batch(changed, origin=20, history_points=13, horizon=6, short_steps=3, profile=profile)
-    expect(before.shape[1] == 16, "вектор признаков фиксирован")
-    expect(np.allclose(before, after, equal_nan=True), "скорость после T не меняет признаки")
+    after, labels_after, valid = origin_batch(changed, origin=20, history_points=13, horizon=6, short_steps=3, profile=profile, extended=True)
+    plain_after, _, _ = origin_batch(changed, origin=20, history_points=13, horizon=6, short_steps=3, profile=profile)
+    expect(before.shape[1] == len(FEATURE_NAMES), "короткий вектор признаков фиксирован")
+    expect(after.shape[1] == len(FEATURE_NAMES) + len(EXTRA_FEATURE_NAMES), "расширенный вектор длиннее на фиксированный хвост")
+    expect(np.allclose(before, plain_after, equal_nan=True), "скорость после T не меняет короткий вектор")
+    expect(np.allclose(extended_before, after, equal_nan=True), "скорость после T не меняет расширенный вектор")
+    proximity = downstream_queue_proximity(np.array([False, False, True]))
+    expect(proximity[2] == 1.0, "своя очередь даёт близость 1")
+    expect(abs(proximity[1] - 0.5) < 1e-9, "сосед выше по потоку видит очередь через одну связь")
+    expect(proximity[0] < proximity[1], "дальняя связь слабее чувствует хвост")
     expect(not labels_before.any(), "свободный поток не размечается очередью")
     expect(bool(labels_after[valid].all()), "нулевая скорость горизонта становится меткой очереди")
 

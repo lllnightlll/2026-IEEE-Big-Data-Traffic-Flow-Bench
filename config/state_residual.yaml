@@ -1,0 +1,20 @@
+# Поправка State поверх уже принятого контекста.
+# Учится на вырезанных ячейках train: цель — истинная скорость и поток минус контекст.
+# В сдачу панель попадает, только если на отложенных днях S_state выше контекста на min_state_gain.
+# Шкалы RMSE читаются из scoring.yaml, здесь их нет.
+
+max_train_rows: 80000
+rows_per_day: 400
+min_state_gain: 0.01
+missing_lane_count: 1
+learning_rate: 0.08
+max_iter: 150
+max_leaf_nodes: 31
+min_samples_leaf: 50
+l2_regularization: 1.0
+random_state: 0
+artifact_dir: experiments/artifacts/v6
+# Очередь берётся из более нового файла, если он уже собран.
+queue_candidates:
+  - experiments/artifacts/v5/queue_submission.csv
+  - experiments/artifacts/v4/queue_submission.csv

@@ -40,6 +40,18 @@ FEATURE_NAMES = (
     "position_fraction",
 )
 
+# Добавка к вектору, когда onset и ongoing учатся отдельно.
+# Всё по-прежнему считается по истории до T включительно.
+EXTRA_FEATURE_NAMES = (
+    "flow_slope_short",
+    "occupancy_slope_short",
+    "density_ratio",
+    "downstream_flow_ratio",
+    "speed_gap_downstream",
+    "downstream_queue_proximity",
+    "recurrent_share_now",
+)
+
 
 @dataclass
 class DayLattice:
@@ -125,6 +137,7 @@ def origin_batch(
     horizon: int,
     short_steps: int,
     profile: RecurrentQueueProfile,
+    extended: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Признаки, метки и маска конечной скорости горизонта для момента origin.
 
@@ -140,10 +153,45 @@ def origin_batch(
     occ_hist = lattice.occupancy[:, start : origin + 1]
     future_speed = lattice.speed[:, future]
     shares = share_matrix(profile, lattice.times[future])
-    features = _features(speed_hist, flow_hist, occ_hist, shares, lattice.times[future], lattice, short_steps)
+    shares_now = share_matrix(profile, lattice.times[origin : origin + 1])[:, 0]
+    features = feature_matrix(
+        speed_hist,
+        flow_hist,
+        occ_hist,
+        shares,
+        lattice.times[future],
+        lattice,
+        short_steps,
+        shares_now,
+        extended,
+    )
     valid = np.isfinite(future_speed)
     labels = valid & (future_speed <= lattice.thresholds[:, None])
     return features, labels.reshape(-1), valid.reshape(-1)
+
+
+def feature_matrix(
+    speed: np.ndarray,
+    flow: np.ndarray,
+    occupancy: np.ndarray,
+    shares: np.ndarray,
+    future_times: pd.DatetimeIndex,
+    lattice: DayLattice,
+    short_steps: int,
+    shares_now: np.ndarray,
+    extended: bool,
+) -> np.ndarray:
+    """Один вектор на связь и шаг горизонта. extended добавляет признаки срыва и хвоста."""
+    return _features(
+        speed,
+        flow,
+        occupancy,
+        shares,
+        future_times,
+        lattice,
+        short_steps,
+        shares_now if extended else None,
+    )
 
 
 def _features(
@@ -154,6 +202,7 @@ def _features(
     future_times: pd.DatetimeIndex,
     lattice: DayLattice,
     short_steps: int,
+    shares_now: np.ndarray | None = None,
 ) -> np.ndarray:
     width, past = speed.shape
     horizon = shares.shape[1]
@@ -188,26 +237,86 @@ def _features(
     minutes = np.array([stamp.hour * 60 + stamp.minute for stamp in future_times], dtype=float) / (24.0 * 60.0)
     weekdays = np.array([stamp.weekday() for stamp in future_times], dtype=float) / 6.0
     steps = np.tile(np.arange(1, horizon + 1, dtype=float), width)
+    columns = [
+        np.repeat(speed_ratio, horizon),
+        np.repeat(flow_ratio, horizon),
+        np.repeat(occ_now, horizon),
+        np.repeat(slope_short, horizon),
+        np.repeat(slope_long, horizon),
+        np.repeat(min_ratio, horizon),
+        np.repeat(queued_now.astype(float), horizon),
+        np.repeat(history_fraction, horizon),
+        np.repeat(downstream_ratio, horizon),
+        np.repeat(downstream_queued, horizon),
+        np.repeat(upstream_ratio, horizon),
+        steps,
+        shares.reshape(-1),
+        np.tile(minutes, width),
+        np.tile(weekdays, width),
+        np.repeat(position, horizon),
+    ]
+    if shares_now is not None:
+        extra = _link_extras(speed, flow, occupancy, lattice, short_steps, shares_now, queued_now, flow_ratio, speed_ratio)
+        for column in range(extra.shape[1]):
+            columns.append(np.repeat(extra[:, column], horizon))
+    return np.column_stack(columns)
+
+
+def _link_extras(
+    speed: np.ndarray,
+    flow: np.ndarray,
+    occupancy: np.ndarray,
+    lattice: DayLattice,
+    short_steps: int,
+    shares_now: np.ndarray,
+    queued_now: np.ndarray,
+    flow_ratio: np.ndarray,
+    speed_ratio: np.ndarray,
+) -> np.ndarray:
+    """Признаки связи на момент T. Повторяются на каждый шаг горизонта снаружи."""
+    width, past = speed.shape
+    flow_now = flow[:, -1]
+    occ_now = occupancy[:, -1]
+    if past > short_steps:
+        flow_slope = _divide(flow_now - flow[:, -1 - short_steps], lattice.capacity) / short_steps
+        occupancy_slope = _divide(occ_now - occupancy[:, -1 - short_steps], np.ones(width)) / short_steps
+    else:
+        flow_slope = np.full(width, np.nan)
+        occupancy_slope = np.full(width, np.nan)
+    # Плотность относительно свободного режима: (q/v) / (capacity/free_speed).
+    # Около единицы связь загружена, хотя скорость ещё свободная.
+    density_ratio = _divide(flow_now * lattice.free_speed, speed[:, -1] * lattice.capacity)
+    downstream_flow = np.full(width, np.nan)
+    downstream_speed = np.full(width, np.nan)
+    if width > 1:
+        downstream_flow[:-1] = flow_ratio[1:]
+        downstream_speed[:-1] = speed_ratio[1:]
+    speed_gap = speed_ratio - downstream_speed
+    proximity = downstream_queue_proximity(queued_now)
     return np.column_stack(
         [
-            np.repeat(speed_ratio, horizon),
-            np.repeat(flow_ratio, horizon),
-            np.repeat(occ_now, horizon),
-            np.repeat(slope_short, horizon),
-            np.repeat(slope_long, horizon),
-            np.repeat(min_ratio, horizon),
-            np.repeat(queued_now.astype(float), horizon),
-            np.repeat(history_fraction, horizon),
-            np.repeat(downstream_ratio, horizon),
-            np.repeat(downstream_queued, horizon),
-            np.repeat(upstream_ratio, horizon),
-            steps,
-            shares.reshape(-1),
-            np.tile(minutes, width),
-            np.tile(weekdays, width),
-            np.repeat(position, horizon),
+            flow_slope,
+            occupancy_slope,
+            density_ratio,
+            downstream_flow,
+            speed_gap,
+            proximity,
+            shares_now,
         ]
     )
+
+
+def downstream_queue_proximity(queued_now: np.ndarray) -> np.ndarray:
+    """Насколько близко по ходу движения уже стоит очередь. Своя очередь даёт 1, отсутствие — 0."""
+    width = int(queued_now.shape[0])
+    nearest = np.full(width, np.inf)
+    nearest[np.asarray(queued_now, dtype=bool)] = 0.0
+    for index in range(width - 2, -1, -1):
+        nearest[index] = min(float(nearest[index]), float(nearest[index + 1]) + 1.0)
+    proximity = np.zeros(width, dtype=float)
+    finite = np.isfinite(nearest)
+    proximity[finite] = 1.0 / (1.0 + nearest[finite])
+    return proximity
 
 
 def _divide(numerator: np.ndarray, denominator: np.ndarray) -> np.ndarray:
@@ -254,6 +363,7 @@ class ProxyWindow:
     persistence: np.ndarray
     rule: np.ndarray
     probability: np.ndarray
+    split_probability: np.ndarray | None = None
 
 
 def window_iou(truth: np.ndarray, prediction: np.ndarray) -> float:
@@ -366,3 +476,39 @@ class TrainedQueueModel:
 
     def predict(self, features: np.ndarray) -> np.ndarray:
         return self.probabilities(features) >= self.threshold
+
+
+class SplitQueueModel:
+    """Две модели: срыв очереди и уже идущая очередь. У каждой свой порог вероятности.
+
+    Если на одном из условий положительных примеров не хватило, этот ответ
+    берётся из общей модели, обученной на всех окнах.
+    """
+
+    def __init__(
+        self,
+        onset: TrainedQueueModel | None,
+        ongoing: TrainedQueueModel | None,
+        fallback: TrainedQueueModel | None,
+        onset_threshold: float,
+        ongoing_threshold: float,
+    ) -> None:
+        self.onset = onset
+        self.ongoing = ongoing
+        self.fallback = fallback
+        self.onset_threshold = onset_threshold
+        self.ongoing_threshold = ongoing_threshold
+
+    def probabilities(self, features: np.ndarray, onset: bool) -> np.ndarray:
+        specialist = self.onset if onset else self.ongoing
+        if specialist is None:
+            if self.fallback is None:
+                return np.zeros(len(features), dtype=float)
+            return self.fallback.probabilities(features)
+        return specialist.probabilities(features)
+
+    def threshold_for(self, onset: bool) -> float:
+        return self.onset_threshold if onset else self.ongoing_threshold
+
+    def ready(self) -> bool:
+        return self.onset is not None or self.ongoing is not None or self.fallback is not None
