@@ -1,0 +1,30 @@
+# Обучение очереди на train. Порог скорости по-прежнему в scoring.yaml.
+# Отложенные дни те же, что у профиля State: blake2b(panel|date) mod modulus.
+# Порог вероятности выбирается на одной половине отложенных дней и проверяется на другой.
+# В сдачу модель попадает только если там обгоняет уже принятое правило.
+
+holdout_modulus: 7
+holdout_remainder: 0
+# Как часто брать момент T внутри дня при обучении.
+train_stride_minutes: 30
+# Окна проверки не ближе, чем окна соревнования.
+eval_separation_minutes: 360
+# Наклон скорости по последним стольким шагам. Длинный наклон берёт всю историю до T.
+short_steps: 3
+# Доля спокойных моментов, которые оставляем, чтобы модель видела и нули.
+quiet_keep: 0.05
+max_positive_rows: 150000
+max_negative_rows: 150000
+min_positive_rows: 200
+# Минимум окон каждого типа на проверочной половине, иначе решение по этому типу не меняется.
+min_windows: 5
+# Насколько равное среднее IoU onset и ongoing должно превысить правило.
+min_iou_gain: 0.02
+decision_thresholds: [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+learning_rate: 0.08
+max_iter: 80
+max_leaf_nodes: 31
+min_samples_leaf: 40
+l2_regularization: 1.0
+random_state: 0
+artifact_dir: experiments/artifacts/v4
